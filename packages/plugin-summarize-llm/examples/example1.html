@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Summarize LLM Plugin Demo</title>
+  <!-- Load jsPsych core library -->
+  <script src="https://unpkg.com/jspsych@7.3.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-button-response"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-preload@1.0.0"></script>
+
+  <!-- Load the compiled plugin -->
+  <script src="../dist/index.browser.js"></script>
+  <!-- Load the word vectors file -->
+  <script src="../wordVecs/default.js"></script>
+  <!-- Load jsPsych CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/jspsych@7.3.2/css/jspsych.css" />
+  <style>
+      .formatted-output {
+          margin: 20px;
+          padding: 15px;
+          border: 1px solid #ccc;
+          background-color: #f9f9f9;
+          font-family: Arial, sans-serif;
+      }
+      .formatted-output p {
+          margin: 5px 0;
+      }
+      button:disabled {
+          background-color: #ccc;
+          cursor: not-allowed;
+      }
+  </style>
+</head>
+<body></body>
+<script>
+  const jsPsych = initJsPsych();
+
+  let run = 0; // Track the run count
+  let repeatExperiment = true; // Determine if the experiment should repeat
+  let submitButtonDisabled = false; // Track if the submit button should be disabled
+
+  // Preload trial (if needed)
+  const preload = {
+    type: jsPsychPreload,
+    images: [],
+  };
+
+  // Main Summarize LLM trial
+  const summarizeTrial = {
+    type: jsPsychSummarizeLLM,
+    preamble: "Summarize the following text in your own words.",
+    questions: [
+      {
+        prompt: "Despite his desire to become ruler of India and his fascination with his new land, Babur did not adopt Indian culture. Although he was intrigued by the subcontinent’s animals, plants, and climate, he had little interest in its people or in the Hindu religion. He described the people of India as lacking both personal beauty and manners. He admired the land’s wealth but strove to re-create for himself and his family a taste of his homeland by designing gardens in the Persian style. He remained firmly oriented toward central Asia and maintained a post road and waystations connecting the Mughal capital of Agra to Kabul. When he died, he was interred at Agra, but to honor his wishes, his body was later taken home to Kabul for burial.",
+        name: "Mugal Empire",
+        rows: 6,
+        columns: 40,
+        placeholder: "Type your response here...",
+      },
+    ],
+    button_label: "Submit",
+    on_load: function () {
+      // Disable the submit button if needed
+      if (submitButtonDisabled) {
+        const submitButton = document.querySelector("button");
+        if (submitButton) {
+          submitButton.disabled = true;
+        }
+      }
+    },
+    on_finish: function (data) {
+      // Attach the current run to the trial data
+      data.run = run;
+      console.log("Trial finished:", data);
+
+      // Disable the submit button
+      const submitButton = document.querySelector("button");
+      if (submitButton) {
+        submitButton.disabled = true;
+      }
+
+      submitButtonDisabled = true; // Track the disabled state
+    },
+  };
+
+  // Display data after each iteration
+  const show_data = {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `<p style="margin-bottom:0px; font-weight: bold;">Trial data:</p>
+               <div class="formatted-output"></div>`,
+    on_load: function () {
+      // Filter data by the current run
+      const trial_data = jsPsych.data.get().filterCustom(function (trial) {
+        return trial.run === run; // Match the current run
+      }).values();
+
+      // Select the container to display results
+      const container = jsPsych.getDisplayElement().querySelector(".formatted-output");
+
+      // Display formatted results
+      if (trial_data.length > 0) {
+        trial_data.forEach((trial, index) => {
+          if (trial.trial_type === "summarize-llm") {
+            const responseData = trial.response_data;
+            const summaryName = Object.keys(responseData)[0];
+            const { response, similarity } = responseData[summaryName];
+
+            const formattedResult = `
+              <p><strong>Trial ${index + 1}:</strong></p>
+              <p><strong>Question:</strong> ${trial.preamble || "N/A"}</p>
+              <p><strong>Response:</strong> ${response}</p>
+              <p><strong>Similarity:</strong> ${(similarity * 100).toFixed(2)}%</p>
+              <p><strong>Time Elapsed:</strong> ${trial.time_elapsed} ms</p>
+              <hr>
+            `;
+            container.innerHTML += formattedResult;
+          }
+        });
+      } else {
+        container.innerHTML = "<p>No data available for this run.</p>";
+      }
+    },
+    choices: ["Repeat demo", "Finish"],
+    on_finish: function (data) {
+      // Check choice to determine if the loop should repeat
+      repeatExperiment = data.response === 0; // Repeat if "Repeat demo" is chosen
+
+      // Re-enable the submit button for the next run
+      if (repeatExperiment) {
+        submitButtonDisabled = false; // Reset the disabled state
+      }
+    },
+  };
+
+  // Trial loop structure
+  const trial_loop = {
+    timeline: [summarizeTrial, show_data],
+    loop_function: function () {
+      console.log("Incrementing run. Current run before increment:", run);
+      run++;
+      return repeatExperiment;
+    },
+  };
+
+  // Timeline setup
+  const timeline = [preload, trial_loop];
+
+  // Run the experiment
+  jsPsych.run(timeline);
+</script>
+</html>
